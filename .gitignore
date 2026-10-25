@@ -1,0 +1,16 @@
+*.iml
+.gradle
+/local.properties
+/.idea
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+*.jks
+*.keystore
+
+# Node / Backend
+node_modules/
+backend/node_modules/
+backend/feedbacks.json

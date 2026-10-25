@@ -1,0 +1,12 @@
+{
+  "name": "hava-backend",
+  "version": "1.0.0",
+  "description": "Hava Uygulaması - Kullanıcı Geri Bildirimi ve Hata Raporlama Backend Servisi",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": ["weather", "feedback", "android"],
+  "author": "",
+  "license": "ISC"
+}
