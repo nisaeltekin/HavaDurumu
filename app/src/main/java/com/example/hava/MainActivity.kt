@@ -483,8 +483,20 @@ fun CityHeaderTitle(
         }
 
         if (actionText != null && onAction != null) {
-            TextButton(onClick = onAction) {
-                Text(actionText, color = Color.White.copy(alpha = 0.85f), fontSize = 13.sp)
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color.White.copy(alpha = 0.16f))
+                    .border(1.dp, Color.White.copy(alpha = 0.28f), RoundedCornerShape(16.dp))
+                    .clickable(onClick = onAction)
+                    .padding(horizontal = 12.dp, vertical = 7.dp)
+            ) {
+                Text(
+                    text = actionText,
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium
+                )
             }
         }
     }

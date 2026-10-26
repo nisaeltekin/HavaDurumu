@@ -17,45 +17,81 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import java.time.LocalTime
 import kotlin.math.PI
 import kotlin.math.sin
 import kotlin.random.Random
 
 enum class Precipitation { NONE, RAIN, SNOW }
 
-// Gemlik'te görünen o dumanlı gri - koyu lacivert arası asil arka plan rengi
-val FixedAppGradient = listOf(Color(0xFF141E30), Color(0xFF243B55))
+// ── Zamana Göre Arka Plan Degrade Temaları ───────────────────────────────────
+
+// 1. Sabah (06:00 - 12:00): Güneşli, aydınlık, ferah gökyüzü mavisi
+val MorningGradient = listOf(
+    Color(0xFF1E528E),
+    Color(0xFF2980B9),
+    Color(0xFF5DADE2)
+)
+
+// 2. İkindi / Gün Batımı (12:00 - 18:00): Sıcak altın sarısı, kehribar ve gün batımı tonları
+val AfternoonGradient = listOf(
+    Color(0xFF2C3E50),
+    Color(0xFF6C3483),
+    Color(0xFFBA4A00)
+)
+
+// 3. Akşam (18:00 - 24:00): Alacakaranlık, koyu asil akşam laciverti
+val EveningGradient = listOf(
+    Color(0xFF111827),
+    Color(0xFF1B2838),
+    Color(0xFF2E4057)
+)
+
+// 4. Gece (24:00 - 06:00): Derin, dingin dumanlı gece mavisi ve gri
+val NightGradient = listOf(
+    Color(0xFF0F172A),
+    Color(0xFF141E30),
+    Color(0xFF243B55)
+)
 
 data class WeatherLook(
-    val gradient: List<Color> = FixedAppGradient,
+    val gradient: List<Color> = NightGradient,
     val precipitation: Precipitation,
     val showSun: Boolean,
     val showStars: Boolean,
-    val dayPart: String = ""
+    val dayPart: String = "",
+    val hour: Int = 12
 )
 
 val DefaultLook = WeatherLook(
-    gradient = FixedAppGradient,
+    gradient = NightGradient,
     precipitation = Precipitation.NONE,
     showSun = false,
     showStars = true,
-    dayPart = "Gece"
+    dayPart = "Gece",
+    hour = 0
 )
 
-private fun hourOf(time: String?): Int =
-    time?.substringAfter("T")?.substringBefore(":")?.toIntOrNull() ?: 12
+private fun hourOf(time: String?): Int {
+    return time?.substringAfter("T")?.substringBefore(":")?.toIntOrNull()
+        ?: LocalTime.now().hour
+}
 
 fun weatherLook(w: CurrentWeather): WeatherLook {
     val hour = hourOf(w.time)
     val code = w.weatherCode
     val isDay = w.isDay == 1
 
-    val part = when {
-        isDay && hour in 6..10   -> "Sabah"
-        isDay && hour in 11..16  -> "Öğle"
-        isDay && hour in 17..19  -> "Akşam"
-        !isDay && hour in 18..21 -> "Akşam"
-        else                     -> "Gece"
+    // Kullanıcının belirttiği 4 zaman dilimi:
+    // 06:00 - 12:00 -> Sabah
+    // 12:00 - 18:00 -> İkindi / Gün Batımı
+    // 18:00 - 24:00 -> Akşam
+    // 24:00 - 06:00 -> Gece
+    val (gradient, part) = when (hour) {
+        in 6..11  -> MorningGradient to "Sabah"
+        in 12..17 -> AfternoonGradient to "İkindi"
+        in 18..23 -> EveningGradient to "Akşam"
+        else      -> NightGradient to "Gece"
     }
 
     val precipitation = when (code) {
@@ -64,14 +100,15 @@ fun weatherLook(w: CurrentWeather): WeatherLook {
         else                             -> Precipitation.NONE
     }
 
-    val isClear = code <= 1 && precipitation == Precipitation.NONE
+    val isClear = code <= 2 && precipitation == Precipitation.NONE
 
     return WeatherLook(
-        gradient = FixedAppGradient,
+        gradient = gradient,
         precipitation = precipitation,
-        showSun = isClear && isDay,
-        showStars = isClear && !isDay,
-        dayPart = part
+        showSun = isClear && (hour in 6..17),
+        showStars = isClear && (hour !in 6..17),
+        dayPart = part,
+        hour = hour
     )
 }
 
@@ -113,8 +150,8 @@ fun WeatherBackground(
     )
 
     val sunPulse by infiniteTransition.animateFloat(
-        initialValue = 0.85f,
-        targetValue = 1.15f,
+        initialValue = 0.88f,
+        targetValue = 1.12f,
         animationSpec = infiniteRepeatable(tween(3500, easing = LinearEasing), repeatMode = RepeatMode.Reverse),
         label = "sunPulse"
     )
@@ -158,39 +195,51 @@ fun WeatherBackground(
         }
     }
 
-    // Sabit Gri - Koyu Lacivert Degradeli Arka Plan
+    // Dinamik Zamana Göre Degrade Arka Plan
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(FixedAppGradient))
+            .background(Brush.verticalGradient(look.gradient))
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             val w = size.width
             val h = size.height
 
-            // ── 1. GÜNEŞLİ İSE: Sade Güneş ──────────────────────────────────
+            // ── 1. GÜNEŞ: Sağ üst butonların ("➕ Listeye Ekle" / "Kaldır") altına ASLA denk gelmeyecek konumda ──
             if (look.showSun) {
-                val sunCenter = Offset(w * 0.82f, h * 0.12f)
-                val baseRadius = w * 0.09f
+                val isAfternoon = look.hour in 12..17
+                // Butonlar y = 0.08..0.14 aralığındadır.
+                // Güneş ise butonların tamamen altında, büyük derece yazısının hemen yanında y = 0.22..0.25'te durur.
+                val sunCenter = if (isAfternoon) {
+                    Offset(w * 0.76f, h * 0.24f) // İkindi: Batışa doğru daha alçakta
+                } else {
+                    Offset(w * 0.78f, h * 0.21f) // Sabah: Gökyüzünde ferah güneş
+                }
+                val baseRadius = w * 0.085f
 
+                val sunCoreColor = if (isAfternoon) Color(0xFFFF9800) else Color(0xFFFFEB3B)
+                val sunHaloColor = if (isAfternoon) Color(0xFFFFB74D) else Color(0xFFFFEE58)
+
+                // Güneş Halesi
                 drawCircle(
                     brush = Brush.radialGradient(
-                        colors = listOf(Color(0xFFFFEE58).copy(alpha = 0.35f), Color.Transparent),
+                        colors = listOf(sunHaloColor.copy(alpha = 0.32f), Color.Transparent),
                         center = sunCenter,
-                        radius = baseRadius * 3.5f * sunPulse
+                        radius = baseRadius * 3.0f * sunPulse
                     ),
-                    radius = baseRadius * 3.5f * sunPulse,
+                    radius = baseRadius * 3.0f * sunPulse,
                     center = sunCenter
                 )
 
+                // Güneş Gövdesi
                 drawCircle(
-                    color = Color(0xFFFFEB3B),
+                    color = sunCoreColor,
                     radius = baseRadius,
                     center = sunCenter
                 )
             }
 
-            // ── 2. GECE İSE: Sadece Sakin Yıldızlar ─────────────────────────
+            // ── 2. GECE / AKŞAM İSE: Sakin Yıldızlar ─────────────────────────
             if (look.showStars) {
                 stars.forEach { s ->
                     val twinkle = 0.25f + 0.65f * ((sin((time * 2f + s.phase) * (2 * PI.toFloat())) + 1f) / 2f)
